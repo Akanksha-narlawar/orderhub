@@ -2,9 +2,7 @@ import os
 
 from flask import Flask, jsonify
 
-
 app = Flask(__name__)
-
 
 ORDERS = [
     {
@@ -27,13 +25,12 @@ ORDERS = [
     }
 ]
 
-
 @app.route("/")
 def home():
     return jsonify({
-        "message": "OrderHub API"
+        "message": "OrderHub API",
+        "environment": os.getenv("APP_ENV", "development")
     })
-
 
 @app.route("/health")
 def health():
@@ -41,13 +38,11 @@ def health():
         "status": "UP"
     })
 
-
 @app.route("/orders")
 def orders():
     return jsonify({
         "orders": ORDERS
     })
-
 
 @app.route("/version")
 def version():
@@ -56,7 +51,6 @@ def version():
         "build": os.getenv("BUILD_NUMBER", "unknown"),
         "commit": os.getenv("GIT_COMMIT", "unknown")
     })
-
 
 if __name__ == "__main__":
     app.run(
