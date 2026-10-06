@@ -37,7 +37,7 @@ pipeline {
         stage('Unit Test') {
             steps {
                 bat '''
-                    "C:\Users\akank\AppData\Local\Programs\Python\Python311\python.exe" -m venv .jenkins-venv
+                    "C:/Users/akank/AppData/Local/Programs/Python/Python311/python.exe" -m venv .jenkins-venv
                     .jenkins-venv\\Scripts\\python.exe -m pip install -r requirements.txt
                     .jenkins-venv\\Scripts\\pytest.exe -v --junitxml=test-results.xml
                 '''
@@ -164,6 +164,7 @@ pipeline {
         }
     }
 }
+
 
 
 
