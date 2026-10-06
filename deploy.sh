@@ -27,44 +27,45 @@ echo "Container  : $CONTAINER"
 echo "Port       : $PORT"
 echo "======================================"
 
-echo "Checking image..."
+echo "Checking exact image..."
 
 if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
-    echo "Image not found locally. Pulling exact image..."
+    echo "Image not found locally."
+    echo "Pulling exact immutable image..."
 
-    if ! docker pull "$IMAGE"; then
-        echo "ERROR: Failed to pull image: $IMAGE"
+    docker pull "$IMAGE"
+
+    if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
+        echo "ERROR: Required image is not available: $IMAGE"
         exit 2
     fi
 fi
 
+echo "Exact image is available."
+
 echo "Stopping old container..."
 
 if docker ps -q --filter "name=^${CONTAINER}$" | grep -q .; then
-    docker stop "$CONTAINER" || true
+    docker stop "$CONTAINER"
 fi
 
 echo "Removing old container..."
 
 if docker ps -aq --filter "name=^${CONTAINER}$" | grep -q .; then
-    docker rm "$CONTAINER" || true
+    docker rm "$CONTAINER"
 fi
 
 echo "Starting new container..."
 
-if ! docker run -d \
+docker run -d \
     --name "$CONTAINER" \
     -p "$PORT:8080" \
     -e APP_VERSION="$APP_VERSION" \
     -e BUILD_NUMBER="$BUILD_NUMBER" \
     -e GIT_COMMIT="$GIT_COMMIT" \
-    "$IMAGE"; then
+    "$IMAGE"
 
-    echo "ERROR: Container failed to start."
-    exit 3
-fi
-
-echo "Waiting for health..."
+echo "Waiting for application health..."
 
 i=1
 
@@ -77,7 +78,6 @@ while [ "$i" -le 30 ]; do
 
     echo "Waiting... attempt $i/30"
     sleep 2
-
     i=$((i + 1))
 done
 
@@ -85,27 +85,29 @@ if ! curl -fsS "http://localhost:$PORT/health" >/dev/null 2>&1; then
     echo "ERROR: Health check FAILED."
 
     docker logs "$CONTAINER" || true
-
     docker stop "$CONTAINER" || true
     docker rm "$CONTAINER" || true
 
-    exit 4
+    exit 3
 fi
 
 echo "Running smoke test..."
 
-if ! curl -fsS "http://localhost:$PORT/orders" >/dev/null; then
-    echo "ERROR: Orders smoke test FAILED."
-    docker logs "$CONTAINER" || true
-    exit 5
-fi
+curl -fsS "http://localhost:$PORT/orders" >/dev/null
 
-if ! curl -fsS "http://localhost:$PORT/version" >/dev/null; then
-    echo "ERROR: Version smoke test FAILED."
-    docker logs "$CONTAINER" || true
-    exit 6
-fi
+echo "Orders endpoint PASSED."
 
+curl -fsS "http://localhost:$PORT/version"
+
+echo
+
+echo "Version endpoint PASSED."
+
+echo "Checking container user..."
+
+docker exec "$CONTAINER" whoami
+
+echo
 echo "======================================"
 echo "Deployment successful"
 echo "======================================"
@@ -115,15 +117,9 @@ docker inspect "$CONTAINER" \
     --format '{{.Config.Image}}'
 
 echo
-
-echo "Application version:"
-curl -fsS "http://localhost:$PORT/version"
+echo "Container status:"
+docker ps --filter "name=^${CONTAINER}$"
 
 echo
-
-echo "Container user:"
-docker exec "$CONTAINER" whoami
-
-echo "======================================"
 echo "OrderHub deployment completed."
 echo "======================================"
