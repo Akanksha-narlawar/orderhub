@@ -52,7 +52,7 @@ def test_version_defaults(client):
 
     data = response.get_json()
 
-    assert data["version"] == "1.0.0"
+    assert data["version"] == "1.0.1"
     assert data["build"] == "unknown"
     assert data["commit"] == "unknown"
 
