@@ -8,9 +8,11 @@ GIT_COMMIT="${3:-unknown}"
 
 CONTAINER="orderhub"
 PORT="8080"
+APP_VERSION="1.0.1"
 
 if [ -z "$IMAGE" ]; then
     echo "ERROR: Docker image was not provided."
+    echo "Usage: ./deploy.sh <image> <build_number> <git_commit>"
     exit 1
 fi
 
@@ -20,6 +22,7 @@ echo "======================================"
 echo "Image      : $IMAGE"
 echo "Build      : $BUILD_NUMBER"
 echo "Git Commit : $GIT_COMMIT"
+echo "App Version: $APP_VERSION"
 echo "Container  : $CONTAINER"
 echo "Port       : $PORT"
 echo "======================================"
@@ -52,7 +55,7 @@ echo "Starting new container..."
 if ! docker run -d \
     --name "$CONTAINER" \
     -p "$PORT:8080" \
-    -e APP_VERSION="1.0.0" \
+    -e APP_VERSION="$APP_VERSION" \
     -e BUILD_NUMBER="$BUILD_NUMBER" \
     -e GIT_COMMIT="$GIT_COMMIT" \
     "$IMAGE"; then
@@ -92,19 +95,28 @@ fi
 echo "Running smoke test..."
 
 if ! curl -fsS "http://localhost:$PORT/orders" >/dev/null; then
-    echo "ERROR: Smoke test FAILED."
+    echo "ERROR: Orders smoke test FAILED."
+    docker logs "$CONTAINER" || true
     exit 5
+fi
+
+if ! curl -fsS "http://localhost:$PORT/version" >/dev/null; then
+    echo "ERROR: Version smoke test FAILED."
+    docker logs "$CONTAINER" || true
+    exit 6
 fi
 
 echo "======================================"
 echo "Deployment successful"
 echo "======================================"
 
-echo "Image:"
+echo "Deployed image:"
 docker inspect "$CONTAINER" \
     --format '{{.Config.Image}}'
 
-echo "Version:"
+echo
+
+echo "Application version:"
 curl -fsS "http://localhost:$PORT/version"
 
 echo
@@ -112,4 +124,6 @@ echo
 echo "Container user:"
 docker exec "$CONTAINER" whoami
 
+echo "======================================"
+echo "OrderHub deployment completed."
 echo "======================================"
