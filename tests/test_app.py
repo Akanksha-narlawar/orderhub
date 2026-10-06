@@ -46,7 +46,11 @@ def test_orders(client):
     assert len(data["orders"]) > 0
 
 
-def test_version_defaults(client):
+def test_version_defaults(client, monkeypatch):
+    monkeypatch.delenv("APP_VERSION", raising=False)
+    monkeypatch.delenv("BUILD_NUMBER", raising=False)
+    monkeypatch.delenv("GIT_COMMIT", raising=False)
+
     response = client.get("/version")
     assert response.status_code == 200
 
