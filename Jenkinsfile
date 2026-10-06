@@ -1,3 +1,4 @@
+@'
 pipeline {
     agent any
 
@@ -9,7 +10,7 @@ pipeline {
     environment {
         APP_NAME = "orderhub"
         REGISTRY = "docker.io/akanksha1822"
-        APP_VERSION = "1.0.0"
+        APP_VERSION = "1.0.1"
     }
 
     stages {
@@ -19,8 +20,8 @@ pipeline {
                 checkout scm
 
                 script {
-                    env.SHORT_GIT_COMMIT = sh(
-                        script: "git rev-parse --short HEAD",
+                    env.SHORT_GIT_COMMIT = bat(
+                        script: '@git rev-parse --short HEAD',
                         returnStdout: true
                     ).trim()
 
@@ -35,15 +36,12 @@ pipeline {
 
         stage('Unit Test') {
             steps {
-                sh '''
-                    python3 -m venv .venv
-                    . .venv/bin/activate
-                    pip install --upgrade pip
-                    pip install -r requirements.txt
-                    pytest -v --junitxml=test-results.xml
+                bat '''
+                    python -m venv .jenkins-venv
+                    .jenkins-venv\\Scripts\\python.exe -m pip install -r requirements.txt
+                    .jenkins-venv\\Scripts\\pytest.exe -v --junitxml=test-results.xml
                 '''
             }
-
             post {
                 always {
                     junit 'test-results.xml'
@@ -57,12 +55,7 @@ pipeline {
                     env.IMAGE_TAG = "${BUILD_NUMBER}-${SHORT_GIT_COMMIT}"
                     env.FULL_IMAGE = "${REGISTRY}/${APP_NAME}:${IMAGE_TAG}"
 
-                    sh """
-                        docker build \
-                          --build-arg APP_VERSION=${APP_VERSION} \
-                          -t ${APP_NAME}:${BUILD_NUMBER} \
-                          -t ${FULL_IMAGE} .
-                    """
+                    bat "docker build -t ${APP_NAME}:${BUILD_NUMBER} -t ${FULL_IMAGE} ."
 
                     echo "Built image: ${FULL_IMAGE}"
                 }
@@ -71,25 +64,23 @@ pipeline {
 
         stage('Test Docker Image') {
             steps {
-                sh '''
-                    docker rm -f orderhub-test || true
+                bat '''
+                    docker rm -f orderhub-test 2>NUL || exit /b 0
 
-                    docker run -d \
-                      --name orderhub-test \
-                      -p 18080:8080 \
-                      -e APP_VERSION=${APP_VERSION} \
-                      -e BUILD_NUMBER=${BUILD_NUMBER} \
-                      -e GIT_COMMIT=${GIT_COMMIT} \
-                      ${FULL_IMAGE}
+                    docker run -d --name orderhub-test -p 18080:8080 ^
+                      -e APP_VERSION=%APP_VERSION% ^
+                      -e BUILD_NUMBER=%BUILD_NUMBER% ^
+                      -e GIT_COMMIT=%GIT_COMMIT% ^
+                      %FULL_IMAGE%
 
-                    sleep 5
+                    timeout /t 8 /nobreak >NUL
 
-                    curl --fail http://localhost:18080/health
+                    curl.exe --fail http://localhost:18080/health
+                    curl.exe --fail http://localhost:18080/orders
+                    curl.exe --fail http://localhost:18080/version
 
-                    curl --fail http://localhost:18080/version
-
+                    docker inspect orderhub-test --format "{{.State.Health.Status}}"
                     docker logs orderhub-test
-
                     docker rm -f orderhub-test
                 '''
             }
@@ -104,13 +95,9 @@ pipeline {
                         passwordVariable: 'DOCKER_PASSWORD'
                     )
                 ]) {
-                    sh '''
-                        echo "$DOCKER_PASSWORD" | docker login \
-                          -u "$DOCKER_USERNAME" \
-                          --password-stdin
-
-                        docker push ${FULL_IMAGE}
-
+                    bat '''
+                        echo %DOCKER_PASSWORD% | docker login -u %DOCKER_USERNAME% --password-stdin
+                        docker push %FULL_IMAGE%
                         docker logout
                     '''
                 }
@@ -119,9 +106,7 @@ pipeline {
 
         stage('Approval') {
             steps {
-                input message: "Deploy ${FULL_IMAGE} to production?",
-
-                      ok: "Deploy"
+                input message: "Deploy ${FULL_IMAGE} to production?", ok: "Deploy"
             }
         }
 
@@ -134,27 +119,28 @@ pipeline {
                         passwordVariable: 'DEPLOY_PASSWORD'
                     )
                 ]) {
-                    echo "Production deployment will use: ${FULL_IMAGE}"
-
-                    sh '''
-                        chmod +x deploy.sh
-
-                        ./deploy.sh \
-                          "${FULL_IMAGE}" \
-                          "${BUILD_NUMBER}" \
-                          "${GIT_COMMIT}"
-                    '''
+                    bat """
+                        docker rm -f orderhub 2>NUL
+                        docker pull ${FULL_IMAGE}
+                        docker run -d --name orderhub -p 8080:8080 ^
+                          -e APP_VERSION=${APP_VERSION} ^
+                          -e BUILD_NUMBER=${BUILD_NUMBER} ^
+                          -e GIT_COMMIT=${GIT_COMMIT} ^
+                          ${FULL_IMAGE}
+                    """
                 }
             }
         }
 
         stage('Smoke Test') {
             steps {
-                sh '''
-                    echo "Running production smoke test..."
-                    curl --fail http://localhost:8080/health
-                    curl --fail http://localhost:8080/orders
-                    curl --fail http://localhost:8080/version
+                bat '''
+                    timeout /t 8 /nobreak >NUL
+                    curl.exe --fail http://localhost:8080/health
+                    curl.exe --fail http://localhost:8080/orders
+                    curl.exe --fail http://localhost:8080/version
+                    docker inspect orderhub --format "{{.State.Health.Status}}"
+                    docker exec orderhub whoami
                 '''
             }
         }
@@ -173,10 +159,10 @@ pipeline {
         }
 
         always {
-            sh '''
-                docker ps -a || true
-                docker images || true
-            '''
+            bat 'docker ps -a'
+            bat 'docker images orderhub'
         }
     }
 }
+'@ | Set-Content Jenkinsfile
+
