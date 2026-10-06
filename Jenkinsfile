@@ -1,4 +1,3 @@
-
 pipeline {
     agent any
 
@@ -62,12 +61,6 @@ pipeline {
                     env.FULL_IMAGE = "${REGISTRY}/${APP_NAME}:${IMAGE_TAG}"
 
                     bat "docker build -t ${APP_NAME}:${BUILD_NUMBER} -t ${FULL_IMAGE} ."
-                    if (bat(
-                        script: 'exit /b 0',
-                        returnStatus: true
-                    ) != 0) {
-                        error "Docker build failed."
-                    }
 
                     echo "Built image: ${FULL_IMAGE}"
                 }
@@ -166,34 +159,12 @@ pipeline {
 
         stage('Deploy') {
             steps {
-                withCredentials([
-                    usernamePassword(
-                        credentialsId: 'production-server',
-                        usernameVariable: 'DEPLOY_USER',
-                        passwordVariable: 'DEPLOY_PASSWORD'
-                    )
-                ]) {
-                    bat '''
-                        docker rm -f orderhub 2>NUL || echo No existing production container
-
-                        docker pull %FULL_IMAGE%
-                        if errorlevel 1 (
-                            echo Docker image pull FAILED.
-                            exit /b 1
-                        )
-
-                        docker run -d --name orderhub -p 8080:8080 ^
-                          -e APP_VERSION=%APP_VERSION% ^
-                          -e BUILD_NUMBER=%BUILD_NUMBER% ^
-                          -e GIT_COMMIT=%GIT_COMMIT% ^
-                          %FULL_IMAGE%
-
-                        if errorlevel 1 (
-                            echo Production container start FAILED.
-                            exit /b 1
-                        )
-                    '''
-                }
+                bat """
+                    "C:\\Program Files\\Git\\bin\\bash.exe" ./deploy.sh ^
+                        "${FULL_IMAGE}" ^
+                        "${BUILD_NUMBER}" ^
+                        "${GIT_COMMIT}"
+                """
             }
         }
 
