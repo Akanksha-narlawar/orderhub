@@ -125,20 +125,21 @@ pipeline {
         stage('Push Image') {
             steps {
                 withCredentials([
-                    usernamePassword(
-                        credentialsId: 'dockerhub-new',
-                        usernameVariable: 'DOCKER_USERNAME',
-                        passwordVariable: 'DOCKER_PASSWORD'
+                    string(
+                        credentialsId: 'dockerhub-token',
+                        variable: 'DOCKER_TOKEN'
                     )
                 ]) {
                     bat '''
-                        echo %DOCKER_PASSWORD% | docker login -u %DOCKER_USERNAME% --password-stdin
+                        powershell -NoProfile -Command "$env:DOCKER_TOKEN | docker login -u akanksha1822 --password-stdin"
+
                         if errorlevel 1 (
                             echo Docker Hub login FAILED.
                             exit /b 1
                         )
 
                         docker push %FULL_IMAGE%
+
                         if errorlevel 1 (
                             echo Docker image push FAILED.
                             docker logout
@@ -224,5 +225,3 @@ pipeline {
         }
     }
 }
-
-
